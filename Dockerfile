@@ -7,4 +7,5 @@ WORKDIR /app
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir ".[dev]"
 COPY . .
-
+RUN adduser --disabled-password --gecos "" appuser
+USER appuser
