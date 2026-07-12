@@ -20,6 +20,7 @@ except ModuleNotFoundError:  # pragma: no cover - dependency is installed in the
     structlog = _FallbackStructlog()  # type: ignore[assignment]
 
 from app.core.settings import Settings
+from app.execution_simulator.paper_execution import PaperExecutionEvent
 from app.risk.engine import RiskDecision
 from app.strategy.signals import StrategySignal
 
@@ -97,6 +98,24 @@ def render_risk_message(symbol: str | None, decision: RiskDecision) -> str:
         f"Объект: {subject}\n"
         f"Код: {_translate_reason(decision.code)}\n"
         f"Сообщение: {decision.message}"
+    )
+
+
+def render_paper_execution_message(event: PaperExecutionEvent) -> str:
+    if event.kind == "opened":
+        return (
+            "Paper-позиция открыта\n"
+            f"Символ: {event.symbol}\n"
+            "Конструкция: spot long + perpetual short\n"
+            f"Объем: {event.notional:.2f} USDT\n"
+            f"Комиссии входа: {event.fees:.4f} USDT"
+        )
+    return (
+        "Paper-позиция закрыта\n"
+        f"Символ: {event.symbol}\n"
+        f"Объем: {event.notional:.2f} USDT\n"
+        f"Реализованный PnL: {event.pnl:.4f} USDT\n"
+        f"Все комиссии: {event.fees:.4f} USDT"
     )
 
 

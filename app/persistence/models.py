@@ -74,6 +74,7 @@ class SimulatedOrder(Base):
     __table_args__ = (Index("uq_simulated_order_idempotency", "idempotency_key", unique=True),)
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    position_id: Mapped[uuid.UUID | None] = mapped_column(ForeignKey("positions.id"))
     idempotency_key: Mapped[str] = mapped_column(String(128))
     strategy: Mapped[StrategyName] = mapped_column(Enum(StrategyName))
     symbol: Mapped[str] = mapped_column(String(32), index=True)
@@ -120,6 +121,10 @@ class Position(Base):
     notional: Mapped[Decimal] = mapped_column(Numeric(38, 18))
     leverage: Mapped[Decimal] = mapped_column(Numeric(38, 18))
     liquidation_price: Mapped[Decimal | None] = mapped_column(Numeric(38, 18))
+    exit_spot_price: Mapped[Decimal | None] = mapped_column(Numeric(38, 18))
+    exit_perp_price: Mapped[Decimal | None] = mapped_column(Numeric(38, 18))
+    realized_pnl: Mapped[Decimal | None] = mapped_column(Numeric(38, 18))
+    total_fees: Mapped[Decimal] = mapped_column(Numeric(38, 18), default=Decimal("0"))
     is_open: Mapped[bool] = mapped_column(default=True, index=True)
     opened_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
     closed_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True))
@@ -178,4 +183,3 @@ class Setting(Base):
     key: Mapped[str] = mapped_column(String(128), primary_key=True)
     value: Mapped[dict[str, Any]] = mapped_column(JSONB)
     updated_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), default=utc_now)
-

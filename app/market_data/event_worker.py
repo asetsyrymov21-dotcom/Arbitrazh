@@ -24,13 +24,19 @@ except ModuleNotFoundError:  # pragma: no cover - dependency is installed in the
 
 from app.core.settings import Settings
 from app.core.time import utc_now
+from app.execution_simulator.paper_execution import PaperExecutionService
 from app.market_data.bybit_public import BybitPublicClient
 from app.market_data.repository import persist_orderbook_snapshot
 from app.persistence.database import SessionLocal
 from app.persistence.models import RiskEvent, Signal, StrategyName
 from app.risk.engine import RiskDecision, RiskEngine
 from app.strategy.signals import FundingStrategy, SpreadStrategy, StrategySignal
-from app.telegram.notifier import TelegramNotifier, render_risk_message, render_signal_message
+from app.telegram.notifier import (
+    TelegramNotifier,
+    render_paper_execution_message,
+    render_risk_message,
+    render_signal_message,
+)
 
 log = structlog.get_logger(__name__)
 
@@ -130,6 +136,8 @@ async def run_market_event_cycle(
                 ),
                 spread_strategy.evaluate_entry(symbol=symbol, spot_book=spot_book, perp_book=perp_book),
             ]
+            spread_entry = signals[-1]
+            spread_exit = spread_strategy.evaluate_exit(symbol=symbol, spot_book=spot_book, perp_book=perp_book)
 
             async with SessionLocal() as session:
                 await persist_orderbook_snapshot(session, spot_book)
@@ -141,6 +149,19 @@ async def run_market_event_cycle(
                 for signal in signals:
                     session.add(_signal_row(signal))
                     await _notify_signal(signal, notify, gate, now)
+                execution, execution_risk = await PaperExecutionService(settings, risk).process(
+                    session,
+                    symbol=symbol,
+                    enter=spread_entry.action == "enter",
+                    exit=spread_exit.action == "exit",
+                    spot_book=spot_book,
+                    perp_book=perp_book,
+                )
+                if execution is not None and notify is not None:
+                    await notify(render_paper_execution_message(execution))
+                if execution_risk is not None and not execution_risk.allowed:
+                    session.add(_risk_event(symbol, execution_risk))
+                    await _notify_risk(symbol, execution_risk, notify, gate, now)
                 await session.commit()
         except Exception as exc:
             log.warning("market_event_cycle_symbol_failed", symbol=symbol, error=str(exc))

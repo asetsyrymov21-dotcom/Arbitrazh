@@ -2,6 +2,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from app.execution_simulator.simulator import ExecutionSimulator
+from app.execution_simulator.paper_execution import calculate_realized_pnl
 from app.market_data.types import BookLevel, OrderBook
 
 
@@ -55,3 +56,14 @@ def test_sell_uses_bid_depth_and_partial_fill() -> None:
 def test_funding_payment_for_short_receives_positive_funding() -> None:
     assert ExecutionSimulator.simulate_funding_payment(Decimal("10000"), Decimal("0.0001")) == Decimal("1.0000")
 
+
+def test_realized_pnl_accounts_for_both_hedge_legs_and_fees() -> None:
+    pnl = calculate_realized_pnl(
+        qty=Decimal("2"),
+        entry_spot=Decimal("100"),
+        entry_perp=Decimal("101"),
+        exit_spot=Decimal("102"),
+        exit_perp=Decimal("102"),
+        fees=Decimal("0.5"),
+    )
+    assert pnl == Decimal("-0.5")

@@ -2,7 +2,7 @@ from decimal import Decimal
 from typing import Any
 
 from fastapi import APIRouter, Depends
-from sqlalchemy import desc, select
+from sqlalchemy import desc, func, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.settings import settings
@@ -83,6 +83,12 @@ async def positions(session: AsyncSession = Depends(get_session)) -> list[dict[s
             "spot_qty": str(row.spot_qty),
             "perp_qty": str(row.perp_qty),
             "notional": str(row.notional),
+            "entry_spot_price": str(row.entry_spot_price),
+            "entry_perp_price": str(row.entry_perp_price),
+            "exit_spot_price": _decimal_to_str(row.exit_spot_price),
+            "exit_perp_price": _decimal_to_str(row.exit_perp_price),
+            "realized_pnl": _decimal_to_str(row.realized_pnl),
+            "total_fees": str(row.total_fees),
             "is_open": row.is_open,
             "opened_at": row.opened_at.isoformat(),
             "closed_at": row.closed_at.isoformat() if row.closed_at else None,
@@ -112,8 +118,20 @@ async def trades(session: AsyncSession = Depends(get_session), limit: int = 100)
 
 
 @router.get("/pnl")
-async def pnl() -> dict[str, Any]:
-    return {key: str(value) if isinstance(value, Decimal) else value for key, value in EMPTY_METRICS.__dict__.items()}
+async def pnl(session: AsyncSession = Depends(get_session)) -> dict[str, Any]:
+    realized = (
+        await session.execute(
+            select(func.coalesce(func.sum(Position.realized_pnl), Decimal("0"))).where(Position.is_open.is_(False))
+        )
+    ).scalar_one()
+    fees = (await session.execute(select(func.coalesce(func.sum(Position.total_fees), Decimal("0"))))).scalar_one()
+    return {
+        "realized_pnl": str(realized),
+        "total_fees": str(fees),
+        "open_positions": str(
+            (await session.execute(select(func.count()).select_from(Position).where(Position.is_open.is_(True)))).scalar_one()
+        ),
+    }
 
 
 @router.get("/equity-curve")
@@ -139,4 +157,3 @@ async def risk_events(session: AsyncSession = Depends(get_session), limit: int =
         }
         for row in rows
     ]
-
