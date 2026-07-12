@@ -1,7 +1,8 @@
 from decimal import Decimal
+from typing import Annotated
 
 from pydantic import Field, field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -12,7 +13,9 @@ class Settings(BaseSettings):
     bybit_base_url: str = "https://api.bybit.com"
     bybit_ws_spot_url: str = "wss://stream.bybit.com/v5/public/spot"
     bybit_ws_linear_url: str = "wss://stream.bybit.com/v5/public/linear"
-    watchlist: list[str] = Field(default_factory=lambda: ["BTCUSDT", "ETHUSDT", "SOLUSDT"])
+    watchlist: Annotated[list[str], NoDecode] = Field(
+        default_factory=lambda: ["BTCUSDT", "ETHUSDT", "SOLUSDT"]
+    )
 
     virtual_capital_usdt: Decimal = Decimal("100000")
     max_active_notional_pct: Decimal = Decimal("0.20")
@@ -36,7 +39,7 @@ class Settings(BaseSettings):
     delta_mismatch_pct: Decimal = Decimal("0.03")
 
     telegram_bot_token: str | None = None
-    telegram_allowed_chat_ids: list[int] = Field(default_factory=list)
+    telegram_allowed_chat_ids: Annotated[list[int], NoDecode] = Field(default_factory=list)
 
     @field_validator("watchlist", mode="before")
     @classmethod
@@ -56,4 +59,3 @@ class Settings(BaseSettings):
 
 
 settings = Settings()
-
