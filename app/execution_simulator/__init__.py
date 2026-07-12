@@ -1,0 +1,2 @@
+"""Deterministic paper execution simulator."""
+

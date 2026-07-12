@@ -1,0 +1,2 @@
+"""Bybit paper arbitrage application."""
+
