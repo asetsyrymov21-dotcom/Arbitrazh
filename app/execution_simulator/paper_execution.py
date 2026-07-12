@@ -50,7 +50,7 @@ class PaperExecutionService:
         session: AsyncSession,
         *,
         symbol: str,
-        enter: bool,
+        entry_strategy: StrategyName | None,
         exit: bool,
         spot_book: OrderBook,
         perp_book: OrderBook,
@@ -64,12 +64,17 @@ class PaperExecutionService:
             if exit:
                 return await self._close(session, position, spot_book, perp_book), None
             return None, None
-        if not enter:
+        if entry_strategy is None:
             return None, None
-        return await self._open(session, symbol, spot_book, perp_book)
+        return await self._open(session, symbol, entry_strategy, spot_book, perp_book)
 
     async def _open(
-        self, session: AsyncSession, symbol: str, spot_book: OrderBook, perp_book: OrderBook
+        self,
+        session: AsyncSession,
+        symbol: str,
+        strategy: StrategyName,
+        spot_book: OrderBook,
+        perp_book: OrderBook,
     ) -> tuple[PaperExecutionEvent | None, RiskDecision | None]:
         if spot_book.best_ask is None or perp_book.best_bid is None:
             return None, RiskDecision(False, "missing_orderbook", "missing executable orderbook", "warning")
@@ -102,13 +107,13 @@ class PaperExecutionService:
             return None, decision
 
         request_id = uuid4().hex
-        spot_order = self.simulator.open_spot_long(symbol, qty, spot_book, f"{request_id}:spot-entry")
-        perp_order = self.simulator.open_perp_short("spread", symbol, qty, perp_book, f"{request_id}:perp-entry")
+        spot_order = self.simulator.open_spot_long(strategy.value, symbol, qty, spot_book, f"{request_id}:spot-entry")
+        perp_order = self.simulator.open_perp_short(strategy.value, symbol, qty, perp_book, f"{request_id}:perp-entry")
         if not _is_fully_hedged(spot_order, perp_order, qty):
             return None, RiskDecision(False, "paper_entry_not_fully_hedged", "entry fill was not fully hedged", "warning")
         assert spot_order.avg_price is not None and perp_order.avg_price is not None
         position = Position(
-            strategy=StrategyName.SPREAD,
+            strategy=strategy,
             symbol=symbol,
             spot_qty=qty,
             perp_qty=qty,
@@ -140,8 +145,12 @@ class PaperExecutionService:
         ):
             return None
         request_id = uuid4().hex
-        spot_order = self.simulator.close_spot_long(position.symbol, position.spot_qty, spot_book, f"{request_id}:spot-exit")
-        perp_order = self.simulator.close_perp_short("spread", position.symbol, position.perp_qty, perp_book, f"{request_id}:perp-exit")
+        spot_order = self.simulator.close_spot_long(
+            position.strategy.value, position.symbol, position.spot_qty, spot_book, f"{request_id}:spot-exit"
+        )
+        perp_order = self.simulator.close_perp_short(
+            position.strategy.value, position.symbol, position.perp_qty, perp_book, f"{request_id}:perp-exit"
+        )
         if not _is_fully_hedged(spot_order, perp_order, position.spot_qty):
             return None
         assert spot_order.avg_price is not None and perp_order.avg_price is not None

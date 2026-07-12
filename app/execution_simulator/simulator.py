@@ -108,14 +108,18 @@ class ExecutionSimulator:
             rejected_reason=None if status == "filled" else "insufficient_depth",
         )
 
-    def open_spot_long(self, symbol: str, qty: Decimal, orderbook: OrderBook, client_order_id: str) -> SimulatedOrderResult:
+    def open_spot_long(
+        self, strategy: Strategy, symbol: str, qty: Decimal, orderbook: OrderBook, client_order_id: str
+    ) -> SimulatedOrderResult:
         return self.execute_market_order(
-            strategy="funding", symbol=symbol, market="spot", side="buy", qty=qty, orderbook=orderbook, client_order_id=client_order_id
+            strategy=strategy, symbol=symbol, market="spot", side="buy", qty=qty, orderbook=orderbook, client_order_id=client_order_id
         )
 
-    def close_spot_long(self, symbol: str, qty: Decimal, orderbook: OrderBook, client_order_id: str) -> SimulatedOrderResult:
+    def close_spot_long(
+        self, strategy: Strategy, symbol: str, qty: Decimal, orderbook: OrderBook, client_order_id: str
+    ) -> SimulatedOrderResult:
         return self.execute_market_order(
-            strategy="funding", symbol=symbol, market="spot", side="sell", qty=qty, orderbook=orderbook, client_order_id=client_order_id
+            strategy=strategy, symbol=symbol, market="spot", side="sell", qty=qty, orderbook=orderbook, client_order_id=client_order_id
         )
 
     def open_perp_short(self, strategy: Strategy, symbol: str, qty: Decimal, orderbook: OrderBook, client_order_id: str) -> SimulatedOrderResult:
@@ -175,4 +179,3 @@ class ExecutionSimulator:
             fills=(),
             rejected_reason=reason,
         )
-

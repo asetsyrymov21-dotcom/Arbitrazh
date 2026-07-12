@@ -136,7 +136,6 @@ async def run_market_event_cycle(
                 ),
                 spread_strategy.evaluate_entry(symbol=symbol, spot_book=spot_book, perp_book=perp_book),
             ]
-            spread_entry = signals[-1]
             spread_exit = spread_strategy.evaluate_exit(symbol=symbol, spot_book=spot_book, perp_book=perp_book)
 
             async with SessionLocal() as session:
@@ -149,10 +148,11 @@ async def run_market_event_cycle(
                 for signal in signals:
                     session.add(_signal_row(signal))
                     await _notify_signal(signal, notify, gate, now)
+                entry_signal = next((signal for signal in signals if signal.action == "enter"), None)
                 execution, execution_risk = await PaperExecutionService(settings, risk).process(
                     session,
                     symbol=symbol,
-                    enter=spread_entry.action == "enter",
+                    entry_strategy=StrategyName(entry_signal.strategy) if entry_signal is not None else None,
                     exit=spread_exit.action == "exit",
                     spot_book=spot_book,
                     perp_book=perp_book,
