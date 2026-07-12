@@ -28,9 +28,9 @@ def test_signal_message_contains_trade_context() -> None:
 
     message = render_signal_message(signal)
 
-    assert "Paper signal" in message
+    assert "Paper-сигнал" in message
     assert "BTCUSDT" in message
-    assert "entry_spread" in message
+    assert "спред входа" in message
 
 
 def test_risk_message_contains_code_and_subject() -> None:
@@ -40,4 +40,4 @@ def test_risk_message_contains_code_and_subject() -> None:
 
     assert "Risk alert" in message
     assert "ETHUSDT" in message
-    assert "market_api_error" in message
+    assert "ошибка public market API" in message

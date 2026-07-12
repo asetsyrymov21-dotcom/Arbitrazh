@@ -42,5 +42,5 @@ def test_notifier_is_disabled_without_channel() -> None:
 def test_startup_message_includes_paper_safety() -> None:
     message = render_startup_message(["BTCUSDT"])
 
-    assert "paper trading only" in message
-    assert "real exchange orders are blocked" in message
+    assert "только paper trading" in message
+    assert "реальные биржевые ордера заблокированы" in message

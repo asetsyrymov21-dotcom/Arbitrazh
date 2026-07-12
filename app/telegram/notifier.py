@@ -66,23 +66,25 @@ class TelegramNotifier:
 def render_startup_message(watchlist: list[str]) -> str:
     symbols = ", ".join(watchlist)
     return (
-        "Bybit paper arbitrage bot started\n"
-        "Mode: paper trading only\n"
-        f"Watchlist: {symbols}\n"
-        "Safety: real exchange orders are blocked"
+        "Bybit paper arbitrage bot запущен\n"
+        "Режим: только paper trading\n"
+        f"Мониторинг: {symbols}\n"
+        "Защита: реальные биржевые ордера заблокированы"
     )
 
 
 def render_signal_message(signal: StrategySignal) -> str:
-    details = "\n".join(f"{key}: {value}" for key, value in sorted(signal.payload.items()))
+    details = "\n".join(
+        f"{_translate_payload_key(key)}: {value}" for key, value in sorted(signal.payload.items())
+    )
     suffix = f"\n{details}" if details else ""
     return (
-        "Paper signal\n"
-        f"Strategy: {signal.strategy}\n"
-        f"Symbol: {signal.symbol}\n"
-        f"Action: {signal.action}\n"
-        f"Strength: {signal.strength}\n"
-        f"Reason: {signal.reason}"
+        "Paper-сигнал\n"
+        f"Стратегия: {_translate_strategy(signal.strategy)}\n"
+        f"Символ: {signal.symbol}\n"
+        f"Действие: {_translate_action(signal.action)}\n"
+        f"Сила сигнала: {signal.strength}\n"
+        f"Причина: {_translate_reason(signal.reason)}"
         f"{suffix}"
     )
 
@@ -91,8 +93,54 @@ def render_risk_message(symbol: str | None, decision: RiskDecision) -> str:
     subject = symbol or "system"
     return (
         "Risk alert\n"
-        f"Severity: {decision.severity}\n"
-        f"Subject: {subject}\n"
-        f"Code: {decision.code}\n"
-        f"Message: {decision.message}"
+        f"Важность: {_translate_severity(decision.severity)}\n"
+        f"Объект: {subject}\n"
+        f"Код: {_translate_reason(decision.code)}\n"
+        f"Сообщение: {decision.message}"
     )
+
+
+def _translate_strategy(value: str) -> str:
+    return {"funding": "funding arbitrage", "spread": "spread arbitrage"}.get(value, value)
+
+
+def _translate_action(value: str) -> str:
+    return {
+        "enter": "вход",
+        "exit": "выход",
+        "hold": "держать",
+        "reject": "пропуск",
+    }.get(value, value)
+
+
+def _translate_payload_key(value: str) -> str:
+    return {
+        "entry_spread": "спред входа",
+        "exit_spread": "спред выхода",
+        "expected_funding": "ожидаемый funding",
+        "required": "минимум после costs/safety",
+    }.get(value, value)
+
+
+def _translate_severity(value: str) -> str:
+    return {"info": "инфо", "warning": "предупреждение", "critical": "критично"}.get(
+        value,
+        value,
+    )
+
+
+def _translate_reason(value: str) -> str:
+    return {
+        "entry_spread_exceeds_cost_adjusted_threshold": "спред входа выше порога после costs",
+        "spread_converged_to_exit_threshold": "спред сошёлся до порога выхода",
+        "market_api_error": "ошибка public market API",
+        "stale_market_data": "устаревшие market data",
+        "missing_orderbook": "нет нужной стороны стакана",
+        "missing_orderbook_depth": "недостаточно глубины стакана",
+        "funding_not_persistent": "funding не устойчиво положительный",
+        "expected_funding_below_cost_safety_factor": (
+            "ожидаемый funding ниже costs с safety factor"
+        ),
+        "insufficient_funding_history": "недостаточно истории funding",
+        "missing_current_funding": "нет текущего funding rate",
+    }.get(value, value)
