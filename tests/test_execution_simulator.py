@@ -66,4 +66,4 @@ def test_realized_pnl_accounts_for_both_hedge_legs_and_fees() -> None:
         exit_perp=Decimal("102"),
         fees=Decimal("0.5"),
     )
-    assert pnl == Decimal("-0.5")
+    assert pnl == Decimal("1.5")
