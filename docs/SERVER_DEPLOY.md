@@ -20,6 +20,10 @@ ssh root@178.104.156.114 "hostname && docker --version && docker compose version
 
 - Сначала диагностика, потом изменения.
 - Не печатать приватные ключи, токены, пароли и содержимое `.env`.
+- Если пользователь прислал секрет в чат, не повторять его в ответе и не вставлять в логи/URL-проверки.
+- Для Telegram tokens запрещено включать `httpx/httpcore` INFO-логи: URL Telegram Bot API содержит token.
+- Проверять секреты только косвенно: `grep -c`/masked pattern/status code, без вывода самого значения.
+- Если секрет уже попал в чат, terminal output или application logs, считать его скомпрометированным и ротировать.
 - Не менять `.env` на сервере без явного запроса.
 - Не делать destructive-команды без явного подтверждения: `docker compose down -v`, `rm -rf`, `git reset --hard`, очистка volumes/БД.
 - Для уже настроенных production-проектов предпочтителен деплой через GitHub Actions/обычный проектный скрипт, а не ручные правки на VPS.
@@ -151,4 +155,3 @@ ssh root@178.104.156.114 "cd /opt/arbitrazh-paper-bot && docker compose logs app
 ```bash
 ssh root@178.104.156.114 "ls -la /opt && docker ps --format 'table {{.Names}}\t{{.Status}}\t{{.Ports}}'"
 ```
-
