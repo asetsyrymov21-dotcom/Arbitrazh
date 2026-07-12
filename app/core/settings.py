@@ -40,6 +40,7 @@ class Settings(BaseSettings):
 
     telegram_bot_token: str | None = None
     telegram_allowed_chat_ids: Annotated[list[int], NoDecode] = Field(default_factory=list)
+    telegram_notify_chat_id: str | None = None
 
     @field_validator("watchlist", mode="before")
     @classmethod
