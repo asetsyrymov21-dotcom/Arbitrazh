@@ -5,8 +5,6 @@ services:
       POSTGRES_USER: paper
       POSTGRES_PASSWORD: paper
       POSTGRES_DB: paper
-    ports:
-      - "5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -29,4 +27,3 @@ services:
 
 volumes:
   postgres_data:
-
