@@ -32,6 +32,9 @@ class Settings(BaseSettings):
     funding_cost_safety_factor: Decimal = Decimal("2")
     spread_entry_threshold_bps: Decimal = Decimal("30")
     spread_exit_threshold_bps: Decimal = Decimal("5")
+    market_poll_seconds: int = 60
+    signal_notification_cooldown_seconds: int = 900
+    enable_market_event_loop: bool = True
 
     stale_market_data_seconds: int = 10
     max_drawdown_pct: Decimal = Decimal("0.15")

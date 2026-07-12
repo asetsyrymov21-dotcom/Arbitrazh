@@ -1,5 +1,6 @@
-from contextlib import asynccontextmanager
 from collections.abc import AsyncIterator
+from contextlib import asynccontextmanager
+import asyncio
 
 import httpx
 from fastapi import FastAPI
@@ -7,6 +8,7 @@ from fastapi import FastAPI
 from app.api.routes import router
 from app.core.logging import configure_logging
 from app.core.settings import settings
+from app.market_data.event_worker import run_market_event_loop
 from app.telegram.notifier import TelegramNotifier, render_startup_message
 
 
@@ -17,7 +19,17 @@ async def lifespan(_: FastAPI) -> AsyncIterator[None]:
         notifier = TelegramNotifier.from_settings(settings, client)
         if notifier is not None:
             await notifier.send(render_startup_message(settings.watchlist))
-    yield
+        stop_event = asyncio.Event()
+        worker = asyncio.create_task(run_market_event_loop(settings, notifier, stop_event))
+        try:
+            yield
+        finally:
+            stop_event.set()
+            worker.cancel()
+            try:
+                await worker
+            except asyncio.CancelledError:
+                pass
 
 
 app = FastAPI(title="Bybit Paper Arbitrage", version="0.1.0", lifespan=lifespan)

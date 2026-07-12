@@ -20,6 +20,8 @@ except ModuleNotFoundError:  # pragma: no cover - dependency is installed in the
     structlog = _FallbackStructlog()  # type: ignore[assignment]
 
 from app.core.settings import Settings
+from app.risk.engine import RiskDecision
+from app.strategy.signals import StrategySignal
 
 log = structlog.get_logger(__name__)
 
@@ -68,4 +70,29 @@ def render_startup_message(watchlist: list[str]) -> str:
         "Mode: paper trading only\n"
         f"Watchlist: {symbols}\n"
         "Safety: real exchange orders are blocked"
+    )
+
+
+def render_signal_message(signal: StrategySignal) -> str:
+    details = "\n".join(f"{key}: {value}" for key, value in sorted(signal.payload.items()))
+    suffix = f"\n{details}" if details else ""
+    return (
+        "Paper signal\n"
+        f"Strategy: {signal.strategy}\n"
+        f"Symbol: {signal.symbol}\n"
+        f"Action: {signal.action}\n"
+        f"Strength: {signal.strength}\n"
+        f"Reason: {signal.reason}"
+        f"{suffix}"
+    )
+
+
+def render_risk_message(symbol: str | None, decision: RiskDecision) -> str:
+    subject = symbol or "system"
+    return (
+        "Risk alert\n"
+        f"Severity: {decision.severity}\n"
+        f"Subject: {subject}\n"
+        f"Code: {decision.code}\n"
+        f"Message: {decision.message}"
     )
