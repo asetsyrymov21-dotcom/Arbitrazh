@@ -17,9 +17,9 @@ branch_labels: str | Sequence[str] | None = None
 depends_on: str | Sequence[str] | None = None
 
 
-strategy_enum = postgresql.ENUM("FUNDING", "SPREAD", name="strategyname")
-side_enum = postgresql.ENUM("BUY", "SELL", name="side")
-status_enum = postgresql.ENUM("FILLED", "PARTIAL", "REJECTED", name="orderstatus")
+strategy_enum = postgresql.ENUM("FUNDING", "SPREAD", name="strategyname", create_type=False)
+side_enum = postgresql.ENUM("BUY", "SELL", name="side", create_type=False)
+status_enum = postgresql.ENUM("FILLED", "PARTIAL", "REJECTED", name="orderstatus", create_type=False)
 
 
 def upgrade() -> None:
@@ -200,4 +200,3 @@ def downgrade() -> None:
     status_enum.drop(op.get_bind(), checkfirst=True)
     side_enum.drop(op.get_bind(), checkfirst=True)
     strategy_enum.drop(op.get_bind(), checkfirst=True)
-
