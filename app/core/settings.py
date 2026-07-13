@@ -33,6 +33,9 @@ class Settings(BaseSettings):
     spread_entry_threshold_bps: Decimal = Decimal("30")
     spread_exit_threshold_bps: Decimal = Decimal("5")
     market_poll_seconds: int = 60
+    enable_funding_universe_scan: bool = True
+    funding_scan_limit: int = 12
+    min_funding_scan_turnover_usdt: Decimal = Decimal("10000000")
     signal_notification_cooldown_seconds: int = 900
     enable_market_event_loop: bool = True
 

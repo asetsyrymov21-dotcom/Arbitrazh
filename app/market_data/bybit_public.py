@@ -101,6 +101,10 @@ class BybitPublicClient:
             raise RuntimeError(f"No ticker returned for {category}:{symbol}")
         return parse_ticker(category, items[0])
 
+    async def get_tickers(self, category: Category) -> list[Ticker]:
+        payload = await self._get("/v5/market/tickers", {"category": category})
+        return [parse_ticker(category, item) for item in payload["result"]["list"]]
+
     async def get_instruments_info(self, category: Category, symbol: str) -> dict[str, Any]:
         payload = await self._get(
             "/v5/market/instruments-info",

@@ -3,6 +3,8 @@ from collections.abc import Awaitable, Callable
 from datetime import UTC, datetime
 from decimal import Decimal
 
+from sqlalchemy import select
+
 try:
     import structlog
 except ModuleNotFoundError:  # pragma: no cover - dependency is installed in the Docker image.
@@ -27,8 +29,9 @@ from app.core.time import utc_now
 from app.execution_simulator.paper_execution import PaperExecutionService
 from app.market_data.bybit_public import BybitPublicClient
 from app.market_data.repository import persist_orderbook_snapshot
+from app.market_data.universe import select_funding_candidates
 from app.persistence.database import SessionLocal
-from app.persistence.models import RiskEvent, Signal, StrategyName
+from app.persistence.models import Position, RiskEvent, Signal, StrategyName
 from app.risk.engine import RiskDecision, RiskEngine
 from app.strategy.signals import FundingStrategy, SpreadStrategy, StrategySignal
 from app.telegram.notifier import (
@@ -113,7 +116,7 @@ async def run_market_event_cycle(
         round_trip_cost_bps,
     )
 
-    for symbol in settings.watchlist:
+    for symbol in await _symbols_for_cycle(settings, client):
         try:
             spot_book, perp_book, linear_ticker, funding_history = await asyncio.gather(
                 client.get_orderbook("spot", symbol),
@@ -170,6 +173,33 @@ async def run_market_event_cycle(
                 session.add(_risk_event(symbol, decision))
                 await session.commit()
             await _notify_risk(symbol, decision, notify, gate, utc_now())
+
+
+async def _symbols_for_cycle(settings: Settings, client: BybitPublicClient) -> list[str]:
+    symbols = set(settings.watchlist)
+    async with SessionLocal() as session:
+        active_symbols = (
+            await session.execute(select(Position.symbol).where(Position.is_open.is_(True)))
+        ).scalars()
+        symbols.update(active_symbols)
+    if not settings.enable_funding_universe_scan:
+        return sorted(symbols)
+    try:
+        linear_tickers, spot_tickers = await asyncio.gather(
+            client.get_tickers("linear"),
+            client.get_tickers("spot"),
+        )
+        candidates = select_funding_candidates(
+            linear_tickers,
+            {ticker.symbol for ticker in spot_tickers},
+            limit=settings.funding_scan_limit,
+            min_turnover_usdt=settings.min_funding_scan_turnover_usdt,
+        )
+        symbols.update(candidates)
+        log.info("funding_universe_scanned", candidates=candidates, total_symbols=len(symbols))
+    except Exception as exc:
+        log.warning("funding_universe_scan_failed", error=str(exc))
+    return sorted(symbols)
 
 
 def _signal_row(signal: StrategySignal) -> Signal:
