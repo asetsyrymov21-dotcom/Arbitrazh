@@ -35,6 +35,17 @@ def calculate_realized_pnl(
     return (exit_spot - entry_spot) * qty + (entry_perp - exit_perp) * qty - fees
 
 
+def check_open_position_limit(open_positions: int, max_open_positions: int) -> RiskDecision:
+    if open_positions >= max_open_positions:
+        return RiskDecision(
+            False,
+            "max_open_positions",
+            f"open position limit reached: {open_positions}/{max_open_positions}",
+            "warning",
+        )
+    return RiskDecision(True, "ok", "open position limit ok")
+
+
 class PaperExecutionService:
     def __init__(self, settings: Settings, risk: RiskEngine) -> None:
         self.settings = settings
@@ -78,6 +89,14 @@ class PaperExecutionService:
     ) -> tuple[PaperExecutionEvent | None, RiskDecision | None]:
         if spot_book.best_ask is None or perp_book.best_bid is None:
             return None, RiskDecision(False, "missing_orderbook", "missing executable orderbook", "warning")
+        open_positions = (
+            await session.execute(
+                select(func.count()).select_from(Position).where(Position.is_open.is_(True))
+            )
+        ).scalar_one()
+        position_limit = check_open_position_limit(int(open_positions), self.settings.max_open_positions)
+        if not position_limit.allowed:
+            return None, position_limit
         max_notional = self.settings.virtual_capital_usdt * self.settings.max_active_notional_pct
         qty = min(
             max_notional / spot_book.best_ask.price,

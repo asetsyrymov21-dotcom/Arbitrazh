@@ -20,6 +20,7 @@ class Settings(BaseSettings):
     virtual_capital_usdt: Decimal = Decimal("100000")
     max_active_notional_pct: Decimal = Decimal("0.20")
     max_total_deployed_pct: Decimal = Decimal("0.60")
+    max_open_positions: int = 3
     default_leverage: Decimal = Decimal("2")
     max_leverage: Decimal = Decimal("3")
 
@@ -34,7 +35,7 @@ class Settings(BaseSettings):
     spread_exit_threshold_bps: Decimal = Decimal("5")
     market_poll_seconds: int = 60
     enable_funding_universe_scan: bool = True
-    funding_scan_limit: int = 12
+    funding_scan_limit: int = 30
     min_funding_scan_turnover_usdt: Decimal = Decimal("10000000")
     signal_notification_cooldown_seconds: int = 900
     enable_market_event_loop: bool = True

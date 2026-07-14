@@ -2,7 +2,7 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from app.execution_simulator.simulator import ExecutionSimulator
-from app.execution_simulator.paper_execution import calculate_realized_pnl
+from app.execution_simulator.paper_execution import calculate_realized_pnl, check_open_position_limit
 from app.market_data.types import BookLevel, OrderBook
 
 
@@ -67,3 +67,10 @@ def test_realized_pnl_accounts_for_both_hedge_legs_and_fees() -> None:
         fees=Decimal("0.5"),
     )
     assert pnl == Decimal("1.5")
+
+
+def test_open_position_limit_blocks_the_fourth_position() -> None:
+    decision = check_open_position_limit(open_positions=3, max_open_positions=3)
+
+    assert decision.allowed is False
+    assert decision.code == "max_open_positions"
