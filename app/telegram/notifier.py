@@ -115,6 +115,7 @@ def render_paper_execution_message(event: PaperExecutionEvent) -> str:
         f"Символ: {event.symbol}\n"
         f"Объем: {event.notional:.2f} USDT\n"
         f"Реализованный PnL: {event.pnl:.4f} USDT\n"
+        f"Funding-доход: {event.funding_income:.4f} USDT\n"
         f"Все комиссии: {event.fees:.4f} USDT"
     )
 

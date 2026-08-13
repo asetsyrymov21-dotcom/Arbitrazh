@@ -18,6 +18,7 @@ class Settings(BaseSettings):
     )
 
     virtual_capital_usdt: Decimal = Decimal("100000")
+    paper_position_notional_usdt: Decimal = Decimal("10000")
     max_active_notional_pct: Decimal = Decimal("0.20")
     max_total_deployed_pct: Decimal = Decimal("0.60")
     max_open_positions: int = 3
@@ -29,6 +30,7 @@ class Settings(BaseSettings):
     slippage_bps: Decimal = Decimal("2")
 
     funding_horizon_periods: int = 3
+    funding_min_hold_periods: int = 3
     funding_persistence_periods: int = 2
     funding_cost_safety_factor: Decimal = Decimal("2")
     spread_entry_threshold_bps: Decimal = Decimal("30")

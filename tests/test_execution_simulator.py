@@ -69,6 +69,20 @@ def test_realized_pnl_accounts_for_both_hedge_legs_and_fees() -> None:
     assert pnl == Decimal("1.5")
 
 
+def test_realized_pnl_includes_funding_income() -> None:
+    pnl = calculate_realized_pnl(
+        qty=Decimal("100"),
+        entry_spot=Decimal("10"),
+        entry_perp=Decimal("10"),
+        exit_spot=Decimal("10"),
+        exit_perp=Decimal("10"),
+        fees=Decimal("3"),
+        funding_income=Decimal("8"),
+    )
+
+    assert pnl == Decimal("5")
+
+
 def test_open_position_limit_blocks_the_fourth_position() -> None:
     decision = check_open_position_limit(open_positions=3, max_open_positions=3)
 

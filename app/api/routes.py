@@ -9,6 +9,7 @@ from app.core.settings import settings
 from app.persistence.database import get_session
 from app.persistence.models import (
     Fill,
+    FundingPayment,
     MarketSnapshot,
     Position,
     RiskEvent,
@@ -89,6 +90,15 @@ async def positions(session: AsyncSession = Depends(get_session)) -> list[dict[s
             "exit_perp_price": _decimal_to_str(row.exit_perp_price),
             "realized_pnl": _decimal_to_str(row.realized_pnl),
             "total_fees": str(row.total_fees),
+            "funding_income": str(
+                (
+                    await session.execute(
+                        select(func.coalesce(func.sum(FundingPayment.amount), Decimal("0"))).where(
+                            FundingPayment.position_id == row.id
+                        )
+                    )
+                ).scalar_one()
+            ),
             "is_open": row.is_open,
             "opened_at": row.opened_at.isoformat(),
             "closed_at": row.closed_at.isoformat() if row.closed_at else None,
@@ -125,9 +135,13 @@ async def pnl(session: AsyncSession = Depends(get_session)) -> dict[str, Any]:
         )
     ).scalar_one()
     fees = (await session.execute(select(func.coalesce(func.sum(Position.total_fees), Decimal("0"))))).scalar_one()
+    funding_income = (
+        await session.execute(select(func.coalesce(func.sum(FundingPayment.amount), Decimal("0"))))
+    ).scalar_one()
     return {
         "realized_pnl": str(realized),
         "total_fees": str(fees),
+        "funding_income": str(funding_income),
         "open_positions": str(
             (await session.execute(select(func.count()).select_from(Position).where(Position.is_open.is_(True)))).scalar_one()
         ),

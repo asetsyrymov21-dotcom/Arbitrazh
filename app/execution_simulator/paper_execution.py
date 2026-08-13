@@ -8,8 +8,8 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.settings import Settings
 from app.core.time import utc_now
 from app.execution_simulator.simulator import ExecutionSimulator, SimulatedOrderResult
-from app.market_data.types import OrderBook
-from app.persistence.models import Fill, OrderStatus, Position, Side, SimulatedOrder, StrategyName
+from app.market_data.types import FundingPoint, OrderBook
+from app.persistence.models import FundingPayment, Fill, OrderStatus, Position, Side, SimulatedOrder, StrategyName
 from app.risk.engine import RiskDecision, RiskEngine
 
 
@@ -20,6 +20,7 @@ class PaperExecutionEvent:
     notional: Decimal
     pnl: Decimal | None = None
     fees: Decimal | None = None
+    funding_income: Decimal | None = None
 
 
 def calculate_realized_pnl(
@@ -30,9 +31,10 @@ def calculate_realized_pnl(
     exit_spot: Decimal,
     exit_perp: Decimal,
     fees: Decimal,
+    funding_income: Decimal = Decimal("0"),
 ) -> Decimal:
     """PnL for a spot-long / perpetual-short hedged paper position."""
-    return (exit_spot - entry_spot) * qty + (entry_perp - exit_perp) * qty - fees
+    return (exit_spot - entry_spot) * qty + (entry_perp - exit_perp) * qty - fees + funding_income
 
 
 def check_open_position_limit(open_positions: int, max_open_positions: int) -> RiskDecision:
@@ -62,6 +64,8 @@ class PaperExecutionService:
         *,
         symbol: str,
         entry_strategy: StrategyName | None,
+        funding_signal_active: bool,
+        funding_history: list[FundingPoint],
         exit: bool,
         spot_book: OrderBook,
         perp_book: OrderBook,
@@ -72,7 +76,12 @@ class PaperExecutionService:
             )
         ).scalar_one_or_none()
         if position is not None:
-            if exit:
+            await self._accrue_funding(session, position, funding_history)
+            should_close = exit if position.strategy == StrategyName.SPREAD else (
+                not funding_signal_active
+                and await self._funding_payment_count(session, position.id) >= self.settings.funding_min_hold_periods
+            )
+            if should_close:
                 return await self._close(session, position, spot_book, perp_book), None
             return None, None
         if entry_strategy is None:
@@ -98,11 +107,8 @@ class PaperExecutionService:
         if not position_limit.allowed:
             return None, position_limit
         max_notional = self.settings.virtual_capital_usdt * self.settings.max_active_notional_pct
-        qty = min(
-            max_notional / spot_book.best_ask.price,
-            spot_book.best_ask.qty,
-            perp_book.best_bid.qty,
-        )
+        target_notional = min(self.settings.paper_position_notional_usdt, max_notional)
+        qty = target_notional / spot_book.best_ask.price
         notional = qty * spot_book.best_ask.price
         deployed = (
             await session.execute(
@@ -156,12 +162,7 @@ class PaperExecutionService:
     async def _close(
         self, session: AsyncSession, position: Position, spot_book: OrderBook, perp_book: OrderBook
     ) -> PaperExecutionEvent | None:
-        if (
-            spot_book.best_bid is None
-            or perp_book.best_ask is None
-            or spot_book.best_bid.qty < position.spot_qty
-            or perp_book.best_ask.qty < position.perp_qty
-        ):
+        if spot_book.best_bid is None or perp_book.best_ask is None:
             return None
         request_id = uuid4().hex
         spot_order = self.simulator.close_spot_long(
@@ -177,6 +178,7 @@ class PaperExecutionService:
         position.exit_spot_price = spot_order.avg_price
         position.exit_perp_price = perp_order.avg_price
         position.total_fees += close_fees
+        funding_income = await self._funding_income(session, position.id)
         position.realized_pnl = calculate_realized_pnl(
             qty=position.spot_qty,
             entry_spot=position.entry_spot_price,
@@ -184,12 +186,73 @@ class PaperExecutionService:
             exit_spot=spot_order.avg_price,
             exit_perp=perp_order.avg_price,
             fees=position.total_fees,
+            funding_income=funding_income,
         )
         position.is_open = False
         position.closed_at = utc_now()
         _persist_order(session, spot_order, position.id)
         _persist_order(session, perp_order, position.id)
-        return PaperExecutionEvent("closed", position.symbol, position.notional, position.realized_pnl, position.total_fees)
+        return PaperExecutionEvent(
+            "closed",
+            position.symbol,
+            position.notional,
+            position.realized_pnl,
+            position.total_fees,
+            funding_income,
+        )
+
+    async def _accrue_funding(
+        self,
+        session: AsyncSession,
+        position: Position,
+        funding_history: list[FundingPoint],
+    ) -> Decimal:
+        if position.strategy != StrategyName.FUNDING:
+            return Decimal("0")
+        paid_at_values = set(
+            (
+                await session.execute(
+                    select(FundingPayment.paid_at).where(FundingPayment.position_id == position.id)
+                )
+            ).scalars()
+        )
+        accrued = Decimal("0")
+        for point in funding_history:
+            if point.funding_rate_timestamp <= position.opened_at or point.funding_rate_timestamp in paid_at_values:
+                continue
+            amount = ExecutionSimulator.simulate_funding_payment(position.notional, point.funding_rate)
+            session.add(
+                FundingPayment(
+                    position_id=position.id,
+                    symbol=position.symbol,
+                    funding_rate=point.funding_rate,
+                    notional=position.notional,
+                    amount=amount,
+                    paid_at=point.funding_rate_timestamp,
+                )
+            )
+            accrued += amount
+        return accrued
+
+    async def _funding_payment_count(self, session: AsyncSession, position_id: object) -> int:
+        return int(
+            (
+                await session.execute(
+                    select(func.count()).select_from(FundingPayment).where(FundingPayment.position_id == position_id)
+                )
+            ).scalar_one()
+        )
+
+    async def _funding_income(self, session: AsyncSession, position_id: object) -> Decimal:
+        return Decimal(
+            (
+                await session.execute(
+                    select(func.coalesce(func.sum(FundingPayment.amount), Decimal("0"))).where(
+                        FundingPayment.position_id == position_id
+                    )
+                )
+            ).scalar_one()
+        )
 
 
 def _is_fully_hedged(left: SimulatedOrderResult, right: SimulatedOrderResult, qty: Decimal) -> bool:

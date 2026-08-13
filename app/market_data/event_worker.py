@@ -122,7 +122,7 @@ async def run_market_event_cycle(
                 client.get_orderbook("spot", symbol),
                 client.get_orderbook("linear", symbol),
                 client.get_ticker("linear", symbol),
-                client.get_funding_history(symbol, limit=max(settings.funding_persistence_periods, 2)),
+                client.get_funding_history(symbol, limit=max(settings.funding_persistence_periods, 20)),
             )
             now = utc_now()
             decisions = [
@@ -156,6 +156,8 @@ async def run_market_event_cycle(
                     session,
                     symbol=symbol,
                     entry_strategy=StrategyName(entry_signal.strategy) if entry_signal is not None else None,
+                    funding_signal_active=signals[0].action == "enter",
+                    funding_history=funding_history,
                     exit=spread_exit.action == "exit",
                     spot_book=spot_book,
                     perp_book=perp_book,
