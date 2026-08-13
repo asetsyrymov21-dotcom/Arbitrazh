@@ -27,7 +27,13 @@ def _decimal_to_str(value: Decimal | None) -> str | None:
 
 @router.get("/health")
 async def health() -> dict[str, Any]:
-    return {"status": "ok", "mode": "paper", "watchlist": settings.watchlist}
+    return {
+        "status": "ok",
+        "mode": "paper",
+        "scan_mode": "top_24h_turnover",
+        "scan_limit": settings.funding_scan_limit,
+        "base_watchlist": settings.watchlist,
+    }
 
 
 @router.get("/settings")
@@ -35,6 +41,11 @@ async def get_settings() -> dict[str, Any]:
     return {
         "virtual_capital_usdt": str(settings.virtual_capital_usdt),
         "watchlist": settings.watchlist,
+        "scan_mode": "top_24h_turnover",
+        "funding_scan_limit": settings.funding_scan_limit,
+        "min_scan_turnover_usdt": str(settings.min_funding_scan_turnover_usdt),
+        "paper_position_notional_usdt": str(settings.paper_position_notional_usdt),
+        "max_open_positions": settings.max_open_positions,
         "max_active_notional_pct": str(settings.max_active_notional_pct),
         "max_total_deployed_pct": str(settings.max_total_deployed_pct),
         "default_leverage": str(settings.default_leverage),

@@ -10,17 +10,16 @@ def select_funding_candidates(
     limit: int,
     min_turnover_usdt: Decimal,
 ) -> list[str]:
-    """Return liquid spot/perp pairs with the highest positive current funding."""
+    """Return the highest-turnover USDT pairs available on both spot and perpetual."""
     eligible = [
         ticker
         for ticker in linear_tickers
         if ticker.symbol.endswith("USDT")
         and ticker.symbol in spot_symbols
         and ticker.funding_rate is not None
-        and ticker.funding_rate > 0
         and _turnover(ticker) >= min_turnover_usdt
     ]
-    eligible.sort(key=lambda ticker: ticker.funding_rate or Decimal("0"), reverse=True)
+    eligible.sort(key=_turnover, reverse=True)
     return [ticker.symbol for ticker in eligible[:limit]]
 
 
