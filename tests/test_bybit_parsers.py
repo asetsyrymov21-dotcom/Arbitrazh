@@ -3,7 +3,12 @@ from decimal import Decimal
 
 import httpx
 
-from app.market_data.bybit_public import BybitPublicClient, parse_funding_point, parse_orderbook, parse_ticker
+from app.market_data.bybit_public import (
+    BybitPublicClient,
+    parse_funding_point,
+    parse_orderbook,
+    parse_ticker,
+)
 from app.market_data.event_worker import _exception_message
 
 

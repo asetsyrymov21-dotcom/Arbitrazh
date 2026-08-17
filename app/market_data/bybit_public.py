@@ -96,7 +96,9 @@ class BybitPublicClient:
                     isinstance(exc, httpx.HTTPStatusError)
                     and (exc.response.status_code == 429 or exc.response.status_code >= 500)
                 )
-                if attempt == 2 or (isinstance(exc, httpx.HTTPStatusError) and not retryable_status):
+                if attempt == 2 or (
+                    isinstance(exc, httpx.HTTPStatusError) and not retryable_status
+                ):
                     raise
                 await asyncio.sleep(0.25 * (2**attempt))
         raise RuntimeError("unreachable")

@@ -73,7 +73,9 @@ def check_post_fill_profitability(
             )
     else:
         if expected_funding is None:
-            return RiskDecision(False, "missing_expected_funding", "funding estimate is missing", "warning")
+            return RiskDecision(
+                False, "missing_expected_funding", "funding estimate is missing", "warning"
+            )
         required = round_trip_cost * settings.funding_cost_safety_factor
         projected_return = expected_funding + actual_spread
         if projected_return <= required:

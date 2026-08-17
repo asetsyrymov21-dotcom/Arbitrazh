@@ -1,13 +1,13 @@
 from datetime import UTC, datetime
 from decimal import Decimal
 
-from app.execution_simulator.simulator import ExecutionSimulator
 from app.core.settings import Settings
 from app.execution_simulator.paper_execution import (
     calculate_realized_pnl,
     check_open_position_limit,
     check_post_fill_profitability,
 )
+from app.execution_simulator.simulator import ExecutionSimulator
 from app.market_data.types import BookLevel, OrderBook
 from app.persistence.models import StrategyName
 
