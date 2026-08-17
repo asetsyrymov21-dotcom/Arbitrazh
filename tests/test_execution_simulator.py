@@ -2,8 +2,14 @@ from datetime import UTC, datetime
 from decimal import Decimal
 
 from app.execution_simulator.simulator import ExecutionSimulator
-from app.execution_simulator.paper_execution import calculate_realized_pnl, check_open_position_limit
+from app.core.settings import Settings
+from app.execution_simulator.paper_execution import (
+    calculate_realized_pnl,
+    check_open_position_limit,
+    check_post_fill_profitability,
+)
 from app.market_data.types import BookLevel, OrderBook
+from app.persistence.models import StrategyName
 
 
 def make_book() -> OrderBook:
@@ -88,3 +94,29 @@ def test_open_position_limit_blocks_the_fourth_position() -> None:
 
     assert decision.allowed is False
     assert decision.code == "max_open_positions"
+
+
+def test_post_fill_spread_rejects_depth_inverted_entry() -> None:
+    decision = check_post_fill_profitability(
+        settings=Settings(),
+        strategy=StrategyName.SPREAD,
+        spot_price=Decimal("100"),
+        perp_price=Decimal("99.8"),
+        expected_funding=None,
+    )
+
+    assert decision.allowed is False
+    assert decision.code == "post_fill_spread_below_threshold"
+
+
+def test_post_fill_funding_includes_actual_entry_basis() -> None:
+    decision = check_post_fill_profitability(
+        settings=Settings(),
+        strategy=StrategyName.FUNDING,
+        spot_price=Decimal("100"),
+        perp_price=Decimal("99.5"),
+        expected_funding=Decimal("0.01"),
+    )
+
+    assert decision.allowed is False
+    assert decision.code == "post_fill_funding_below_costs"

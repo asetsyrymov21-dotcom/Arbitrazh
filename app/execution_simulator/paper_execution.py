@@ -48,6 +48,44 @@ def check_open_position_limit(open_positions: int, max_open_positions: int) -> R
     return RiskDecision(True, "ok", "open position limit ok")
 
 
+def check_post_fill_profitability(
+    *,
+    settings: Settings,
+    strategy: StrategyName,
+    spot_price: Decimal,
+    perp_price: Decimal,
+    expected_funding: Decimal | None,
+) -> RiskDecision:
+    actual_spread = (perp_price - spot_price) / spot_price
+    round_trip_cost = (
+        settings.spot_taker_fee_bps * Decimal("2")
+        + settings.perp_taker_fee_bps * Decimal("2")
+        + settings.slippage_bps * Decimal("4")
+    ) / Decimal("10000")
+    if strategy == StrategyName.SPREAD:
+        required = round_trip_cost + settings.spread_entry_threshold_bps / Decimal("10000")
+        if actual_spread <= required:
+            return RiskDecision(
+                False,
+                "post_fill_spread_below_threshold",
+                f"actual entry spread {actual_spread} is not above required {required}",
+                "warning",
+            )
+    else:
+        if expected_funding is None:
+            return RiskDecision(False, "missing_expected_funding", "funding estimate is missing", "warning")
+        required = round_trip_cost * settings.funding_cost_safety_factor
+        projected_return = expected_funding + actual_spread
+        if projected_return <= required:
+            return RiskDecision(
+                False,
+                "post_fill_funding_below_costs",
+                f"projected funding return {projected_return} is not above required {required}",
+                "warning",
+            )
+    return RiskDecision(True, "ok", "post-fill profitability check passed")
+
+
 class PaperExecutionService:
     def __init__(self, settings: Settings, risk: RiskEngine) -> None:
         self.settings = settings
@@ -64,6 +102,7 @@ class PaperExecutionService:
         *,
         symbol: str,
         entry_strategy: StrategyName | None,
+        expected_funding: Decimal | None,
         funding_signal_active: bool,
         funding_history: list[FundingPoint],
         exit: bool,
@@ -86,13 +125,16 @@ class PaperExecutionService:
             return None, None
         if entry_strategy is None:
             return None, None
-        return await self._open(session, symbol, entry_strategy, spot_book, perp_book)
+        return await self._open(
+            session, symbol, entry_strategy, expected_funding, spot_book, perp_book
+        )
 
     async def _open(
         self,
         session: AsyncSession,
         symbol: str,
         strategy: StrategyName,
+        expected_funding: Decimal | None,
         spot_book: OrderBook,
         perp_book: OrderBook,
     ) -> tuple[PaperExecutionEvent | None, RiskDecision | None]:
@@ -137,6 +179,15 @@ class PaperExecutionService:
         if not _is_fully_hedged(spot_order, perp_order, qty):
             return None, RiskDecision(False, "paper_entry_not_fully_hedged", "entry fill was not fully hedged", "warning")
         assert spot_order.avg_price is not None and perp_order.avg_price is not None
+        profitability = check_post_fill_profitability(
+            settings=self.settings,
+            strategy=strategy,
+            spot_price=spot_order.avg_price,
+            perp_price=perp_order.avg_price,
+            expected_funding=expected_funding,
+        )
+        if not profitability.allowed:
+            return None, profitability
         position = Position(
             strategy=strategy,
             symbol=symbol,

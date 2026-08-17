@@ -1,6 +1,10 @@
+import asyncio
 from decimal import Decimal
 
-from app.market_data.bybit_public import parse_funding_point, parse_orderbook, parse_ticker
+import httpx
+
+from app.market_data.bybit_public import BybitPublicClient, parse_funding_point, parse_orderbook, parse_ticker
+from app.market_data.event_worker import _exception_message
 
 
 def test_parse_orderbook_uses_bid_ask_depth() -> None:
@@ -54,3 +58,30 @@ def test_parse_funding_history_point() -> None:
     assert point.symbol == "ETHUSDT"
     assert point.funding_rate == Decimal("0.0002")
 
+
+def test_public_client_retries_transient_timeout() -> None:
+    attempts = 0
+
+    def handler(request: httpx.Request) -> httpx.Response:
+        nonlocal attempts
+        attempts += 1
+        if attempts == 1:
+            raise httpx.ReadTimeout("", request=request)
+        return httpx.Response(200, json={"retCode": 0, "result": {}})
+
+    async def run() -> None:
+        client = BybitPublicClient("https://api.bybit.com", "wss://spot", "wss://linear")
+        await client._http.aclose()
+        client._http = httpx.AsyncClient(transport=httpx.MockTransport(handler))
+        try:
+            await client._get("/v5/market/time")
+        finally:
+            await client.close()
+
+    asyncio.run(run())
+
+    assert attempts == 2
+
+
+def test_empty_exception_still_has_diagnostic_name() -> None:
+    assert _exception_message(TimeoutError()) == "TimeoutError"

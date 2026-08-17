@@ -80,12 +80,26 @@ class BybitPublicClient:
 
     async def _get(self, path: str, params: dict[str, Any] | None = None) -> dict[str, Any]:
         ensure_public_market_endpoint(path)
-        response = await self._http.get(urljoin(self.base_url, path.lstrip("/")), params=params)
-        response.raise_for_status()
-        payload = response.json()
-        if payload.get("retCode") != 0:
-            raise RuntimeError(f"Bybit returned retCode={payload.get('retCode')}: {payload.get('retMsg')}")
-        return payload
+        url = urljoin(self.base_url, path.lstrip("/"))
+        for attempt in range(3):
+            try:
+                response = await self._http.get(url, params=params)
+                response.raise_for_status()
+                payload = response.json()
+                if payload.get("retCode") != 0:
+                    raise RuntimeError(
+                        f"Bybit returned retCode={payload.get('retCode')}: {payload.get('retMsg')}"
+                    )
+                return payload
+            except (httpx.TimeoutException, httpx.TransportError, httpx.HTTPStatusError) as exc:
+                retryable_status = (
+                    isinstance(exc, httpx.HTTPStatusError)
+                    and (exc.response.status_code == 429 or exc.response.status_code >= 500)
+                )
+                if attempt == 2 or (isinstance(exc, httpx.HTTPStatusError) and not retryable_status):
+                    raise
+                await asyncio.sleep(0.25 * (2**attempt))
+        raise RuntimeError("unreachable")
 
     async def get_orderbook(self, category: Category, symbol: str, limit: int = 50) -> OrderBook:
         payload = await self._get(

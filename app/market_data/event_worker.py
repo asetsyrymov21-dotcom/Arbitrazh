@@ -156,6 +156,11 @@ async def run_market_event_cycle(
                     session,
                     symbol=symbol,
                     entry_strategy=StrategyName(entry_signal.strategy) if entry_signal is not None else None,
+                    expected_funding=(
+                        Decimal(entry_signal.payload["expected_funding"])
+                        if entry_signal is not None and entry_signal.strategy == "funding"
+                        else None
+                    ),
                     funding_signal_active=signals[0].action == "enter",
                     funding_history=funding_history,
                     exit=spread_exit.action == "exit",
@@ -169,8 +174,14 @@ async def run_market_event_cycle(
                     await _notify_risk(symbol, execution_risk, notify, gate, now)
                 await session.commit()
         except Exception as exc:
-            log.warning("market_event_cycle_symbol_failed", symbol=symbol, error=str(exc))
-            decision = RiskDecision(False, "market_api_error", str(exc), "warning")
+            error_message = _exception_message(exc)
+            log.warning(
+                "market_event_cycle_symbol_failed",
+                symbol=symbol,
+                error_type=type(exc).__name__,
+                error=repr(exc),
+            )
+            decision = RiskDecision(False, "market_api_error", error_message, "warning")
             async with SessionLocal() as session:
                 session.add(_risk_event(symbol, decision))
                 await session.commit()
@@ -200,8 +211,17 @@ async def _symbols_for_cycle(settings: Settings, client: BybitPublicClient) -> l
         symbols.update(candidates)
         log.info("funding_universe_scanned", candidates=candidates, total_symbols=len(symbols))
     except Exception as exc:
-        log.warning("funding_universe_scan_failed", error=str(exc))
+        log.warning(
+            "funding_universe_scan_failed",
+            error_type=type(exc).__name__,
+            error=repr(exc),
+        )
     return sorted(symbols)
+
+
+def _exception_message(exc: Exception) -> str:
+    detail = str(exc).strip()
+    return f"{type(exc).__name__}: {detail}" if detail else type(exc).__name__
 
 
 def _signal_row(signal: StrategySignal) -> Signal:
