@@ -1,4 +1,5 @@
 from dataclasses import dataclass
+from decimal import Decimal, InvalidOperation
 from typing import Protocol
 
 import httpx
@@ -67,79 +68,89 @@ class TelegramNotifier:
 def render_startup_message(watchlist: list[str]) -> str:
     symbols = ", ".join(watchlist)
     return (
-        "Bybit paper arbitrage bot запущен\n"
-        "Режим: только paper trading\n"
-        f"Мониторинг: {symbols}\n"
-        "Защита: реальные биржевые ордера заблокированы"
+        "Бот запущен и проверяет рынок\n"
+        "Режим: учебная торговля, реальные деньги не используются\n"
+        f"Основные пары: {symbols}\n"
+        "Реальные биржевые ордера технически заблокированы"
     )
 
 
 def render_signal_message(signal: StrategySignal) -> str:
     details = "\n".join(
-        f"{_translate_payload_key(key)}: {value}" for key, value in sorted(signal.payload.items())
+        f"{_translate_payload_key(key)}: {_format_payload_value(key, value)}"
+        for key, value in sorted(signal.payload.items())
     )
     suffix = f"\n{details}" if details else ""
     return (
-        "Paper-сигнал\n"
-        f"Стратегия: {_translate_strategy(signal.strategy)}\n"
-        f"Символ: {signal.symbol}\n"
-        f"Действие: {_translate_action(signal.action)}\n"
-        f"Сила сигнала: {signal.strength}\n"
-        f"Причина: {_translate_reason(signal.reason)}"
+        "Найдена торговая возможность\n"
+        "Это еще не открытая сделка. Бот сначала проверит стакан и все ограничения.\n"
+        f"Пара: {signal.symbol}\n"
+        f"Способ заработка: {_translate_strategy(signal.strategy)}\n"
+        f"Предварительное решение: {_translate_action(signal.action)}\n"
+        f"Расчетная доходность: {_format_percent(signal.strength)}\n"
+        f"Почему найден сигнал: {_translate_reason(signal.reason)}"
         f"{suffix}"
     )
 
 
 def render_risk_message(symbol: str | None, decision: RiskDecision) -> str:
-    subject = symbol or "system"
+    subject = symbol or "система"
     return (
-        "Risk alert\n"
-        f"Важность: {_translate_severity(decision.severity)}\n"
-        f"Объект: {subject}\n"
-        f"Код: {_translate_reason(decision.code)}\n"
-        f"Сообщение: {decision.message}"
+        "Предупреждение бота\n"
+        f"Пара: {subject}\n"
+        f"Уровень: {_translate_severity(decision.severity)}\n"
+        f"Что произошло: {_risk_explanation(decision.code)}"
     )
 
 
 def render_paper_execution_message(event: PaperExecutionEvent) -> str:
+    purpose = _execution_purpose(event.strategy)
     if event.kind == "opened":
         return (
-            "Paper-позиция открыта\n"
-            f"Символ: {event.symbol}\n"
-            "Конструкция: spot long + perpetual short\n"
-            f"Объем: {event.notional:.2f} USDT\n"
-            f"Комиссии входа: {event.fees:.4f} USDT"
+            "Учебная сделка открыта\n"
+            f"Пара: {event.symbol}\n"
+            f"Цель: {purpose}\n"
+            "Что сделал бот: купил монету на обычном рынке и одновременно открыл "
+            "противоположную позицию на бессрочном контракте.\n"
+            f"Расчетная сумма: {event.notional:.2f} USDT\n"
+            f"Комиссия за открытие: {event.fees:.2f} USDT\n"
+            "Статус: позиция активна"
         )
+    pnl = event.pnl or Decimal("0")
+    result = "прибыль" if pnl >= 0 else "убыток"
     return (
-        "Paper-позиция закрыта\n"
-        f"Символ: {event.symbol}\n"
-        f"Объем: {event.notional:.2f} USDT\n"
-        f"Реализованный PnL: {event.pnl:.4f} USDT\n"
-        f"Funding-доход: {event.funding_income:.4f} USDT\n"
-        f"Все комиссии: {event.fees:.4f} USDT"
+        "Учебная сделка закрыта\n"
+        f"Пара: {event.symbol}\n"
+        "Статус: позиция больше не активна\n"
+        f"Итог после всех расходов: {result} {abs(pnl):.2f} USDT\n"
+        f"Получено выплат за удержание позиции: {(event.funding_income or Decimal('0')):.2f} USDT\n"
+        f"Всего комиссий: {(event.fees or Decimal('0')):.2f} USDT"
     )
 
 
 def _translate_strategy(value: str) -> str:
-    return {"funding": "funding arbitrage", "spread": "spread arbitrage"}.get(value, value)
+    return {
+        "funding": "получение периодических выплат за удержание позиции",
+        "spread": "заработок на схождении цен двух рынков",
+    }.get(value, "арбитраж между двумя рынками")
 
 
 def _translate_action(value: str) -> str:
     return {
-        "enter": "вход",
-        "exit": "выход",
-        "hold": "держать",
-        "reject": "пропуск",
-    }.get(value, value)
+        "enter": "проверить возможность входа",
+        "exit": "проверить возможность закрытия",
+        "hold": "продолжать наблюдение",
+        "reject": "пропустить",
+    }.get(value, "продолжать наблюдение")
 
 
 def _translate_payload_key(value: str) -> str:
     return {
-        "entry_spread": "спред входа",
-        "exit_spread": "спред выхода",
-        "expected_funding": "ожидаемый funding",
-        "required": "минимум после costs/safety",
-    }.get(value, value)
+        "entry_spread": "разница цен при входе",
+        "exit_spread": "разница цен при выходе",
+        "expected_funding": "ожидаемые выплаты",
+        "required": "минимально допустимая доходность",
+    }.get(value, "Дополнительный показатель")
 
 
 def _translate_severity(value: str) -> str:
@@ -151,16 +162,57 @@ def _translate_severity(value: str) -> str:
 
 def _translate_reason(value: str) -> str:
     return {
-        "entry_spread_exceeds_cost_adjusted_threshold": "спред входа выше порога после costs",
-        "spread_converged_to_exit_threshold": "спред сошёлся до порога выхода",
-        "market_api_error": "ошибка public market API",
-        "stale_market_data": "устаревшие market data",
-        "missing_orderbook": "нет нужной стороны стакана",
-        "missing_orderbook_depth": "недостаточно глубины стакана",
-        "funding_not_persistent": "funding не устойчиво положительный",
+        "entry_spread_exceeds_cost_adjusted_threshold": "разница цен выше безопасного порога",
+        "spread_converged_to_exit_threshold": "разница цен сократилась до уровня закрытия",
+        "market_api_error": "не удалось получить рыночные данные",
+        "stale_market_data": "рыночные данные пришли с задержкой",
+        "missing_orderbook": "нет цен для безопасного исполнения",
+        "missing_orderbook_depth": "в стакане недостаточно объема",
+        "funding_not_persistent": "выплаты недостаточно устойчивы",
         "expected_funding_below_cost_safety_factor": (
-            "ожидаемый funding ниже costs с safety factor"
+            "ожидаемые выплаты не покрывают расходы с запасом"
         ),
-        "insufficient_funding_history": "недостаточно истории funding",
-        "missing_current_funding": "нет текущего funding rate",
-    }.get(value, value)
+        "insufficient_funding_history": "недостаточно истории выплат",
+        "missing_current_funding": "нет текущих данных о выплатах",
+    }.get(value, "условия стратегии выполнены")
+
+
+def _risk_explanation(code: str) -> str:
+    return {
+        "market_api_error": (
+            "не удалось получить свежие данные Bybit. Бот не открывал сделку и продолжит попытки."
+        ),
+        "stale_market_data": "данные пришли с задержкой, поэтому этот цикл пропущен.",
+        "paper_entry_not_fully_hedged": (
+            "сделка не открыта: в стакане не хватило объема для обеих частей позиции."
+        ),
+        "post_fill_spread_below_threshold": (
+            "сделка не открыта: после расчета реального исполнения прибыль стала недостаточной."
+        ),
+        "post_fill_funding_below_costs": (
+            "сделка не открыта: ожидаемые выплаты не покрывают расходы с безопасным запасом."
+        ),
+        "max_open_positions": "сделка не открыта: уже достигнут лимит активных позиций.",
+        "missing_orderbook": "сделка не открыта: нет надежных цен для обеих частей позиции.",
+    }.get(code, "действие отменено внутренней проверкой безопасности.")
+
+
+def _execution_purpose(strategy: str) -> str:
+    return {
+        "funding": "получать периодические выплаты, оставаясь защищенным от движения цены",
+        "spread": "заработать на сокращении разницы цен между двумя рынками",
+    }.get(strategy, "заработать на разнице между двумя рынками")
+
+
+def _format_payload_value(key: str, value: str) -> str:
+    if key in {"entry_spread", "exit_spread", "expected_funding", "required"}:
+        return _format_percent(value)
+    return value
+
+
+def _format_percent(value: Decimal | str) -> str:
+    try:
+        percent = Decimal(str(value)) * Decimal("100")
+    except InvalidOperation:
+        return str(value)
+    return f"{percent:.4f}".rstrip("0").rstrip(".") + "%"

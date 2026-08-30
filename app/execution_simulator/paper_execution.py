@@ -17,6 +17,7 @@ from app.risk.engine import RiskDecision, RiskEngine
 class PaperExecutionEvent:
     kind: str
     symbol: str
+    strategy: str
     notional: Decimal
     pnl: Decimal | None = None
     fees: Decimal | None = None
@@ -210,7 +211,13 @@ class PaperExecutionService:
         await session.flush()
         _persist_order(session, spot_order, position.id)
         _persist_order(session, perp_order, position.id)
-        return PaperExecutionEvent("opened", symbol, position.notional, fees=position.total_fees), None
+        return PaperExecutionEvent(
+            "opened",
+            symbol,
+            strategy.value,
+            position.notional,
+            fees=position.total_fees,
+        ), None
 
     async def _close(
         self, session: AsyncSession, position: Position, spot_book: OrderBook, perp_book: OrderBook
@@ -248,6 +255,7 @@ class PaperExecutionService:
         return PaperExecutionEvent(
             "closed",
             position.symbol,
+            position.strategy.value,
             position.notional,
             position.realized_pnl,
             position.total_fees,
