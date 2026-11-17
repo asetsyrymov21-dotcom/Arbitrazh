@@ -9,7 +9,7 @@ class Settings(BaseSettings):
     model_config = SettingsConfigDict(env_file=".env", env_file_encoding="utf-8", extra="ignore")
 
     app_env: str = "local"
-    database_url: str = "postgresql+asyncpg://paper:paper@localhost:5432/paper"
+    database_url: str = "postgresql+asyncpg://paper@localhost:5432/paper"
     bybit_base_url: str = "https://api.bybit.com"
     bybit_ws_spot_url: str = "wss://stream.bybit.com/v5/public/spot"
     bybit_ws_linear_url: str = "wss://stream.bybit.com/v5/public/linear"
