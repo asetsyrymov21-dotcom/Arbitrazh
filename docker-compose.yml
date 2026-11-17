@@ -3,7 +3,7 @@ services:
     image: postgres:16-alpine
     environment:
       POSTGRES_USER: paper
-      POSTGRES_PASSWORD: paper
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD locally}
       POSTGRES_DB: paper
     volumes:
       - postgres_data:/var/lib/postgresql/data
