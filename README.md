@@ -5,7 +5,7 @@ Paper-trading only bot for Bybit V5 public market data. It simulates funding-rat
 ## Local Start
 
 ```bash
-cp .env.example .env
+nano .env  # create local environment settings; never commit them
 docker compose up --build
 ```
 
