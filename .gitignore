@@ -21,9 +21,6 @@ postgres_data/
 # Secret prevention
 .env
 .env.*
-!.env.example
-!.env.sample
-!.env.template
 *.key
 *.p12
 *.pfx
@@ -33,3 +30,7 @@ service-account*.json
 *.bundle
 .security-workspaces/
 .runtime/
+
+.env*
+*.env
+*.env.*
